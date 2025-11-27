@@ -32,13 +32,10 @@ Berikut adalah antarmuka aplikasi dalam mode terang dan gelap.
 ## 🛠️ Tech Stack (Teknologi yang Digunakan)
 
 * **Bahasa**: Kotlin
-* **UI**: XML Layout / Android View System
-* **Arsitektur**: MVVM (Model-View-ViewModel) *[Opsional: Hapus jika tidak pakai]*
-* **Networking**: Retrofit & OkHttp *[Opsional: Sesuaikan]*
-* **Image Loading**: Glide / Coil *[Opsional: Sesuaikan]*
 
 ## 📥 Cara Instalasi
 
 1. Clone repository ini:
    ```bash
    git clone [https://github.com/username-anda/MangaApp.git](https://github.com/username-anda/MangaApp.git)
+
