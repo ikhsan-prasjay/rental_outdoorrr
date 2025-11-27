@@ -49,4 +49,4 @@ Proses penyelesaian sewa.
 * **Tools**: VS Code, /Laragon
 
 ---
-Created by [Nama Anda]
+
