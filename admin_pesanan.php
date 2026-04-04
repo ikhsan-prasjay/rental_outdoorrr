@@ -3,32 +3,59 @@
 session_start();
 require_once 'koneksi.php';
 
-// 1. CEK KEAMANAN: Pastikan yang akses adalah ADMIN
+// 1. CEK KEAMANAN
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    // Jika bukan admin, tendang ke login
     header('Location: login.php');
     exit();
 }
 
-// 2. PROSES UPDATE STATUS (Jika tombol 'Simpan' ditekan)
+// 2. PROSES UPDATE STATUS
 if (isset($_POST['update_status'])) {
     $rental_id = intval($_POST['rental_id']);
     $new_status = $_POST['status'];
     
-    // Query Update
     $stmt = $koneksi->prepare("UPDATE rentals SET status = ? WHERE id_rentals = ?");
     $stmt->bind_param("si", $new_status, $rental_id);
     
     if ($stmt->execute()) {
-        echo "<script>alert('Status pesanan berhasil diperbarui!'); window.location='admin_pesanan.php';</script>";
+        $pesan_sukses = "Status pesanan #$rental_id berhasil diperbarui!";
     } else {
-        echo "<script>alert('Gagal memperbarui status.');</script>";
+        $pesan_error = "Gagal memperbarui status.";
     }
     $stmt->close();
 }
 
-// 3. AMBIL DATA PESANAN (JOIN dengan tabel USERS untuk dapat nama & no HP)
-// Kita mengurutkan berdasarkan 'created_at' DESC (Terbaru di atas)
+// 3. PROSES HAPUS TRANSAKSI (NEW FEATURE)
+if (isset($_POST['delete_order'])) {
+    $rental_id = intval($_POST['rental_id']);
+
+    // A. Ambil semua item_id yang terkait dengan transaksi ini
+    $stmt_get_item = $koneksi->prepare("SELECT item_id FROM rental_items WHERE rental_id = ?");
+    $stmt_get_item->bind_param("i", $rental_id);
+    $stmt_get_item->execute();
+    $res_item = $stmt_get_item->get_result();
+
+    // B. Kembalikan status barang fisik menjadi 'available' (Tersedia)
+    while ($item = $res_item->fetch_assoc()) {
+        $item_id = $item['item_id'];
+        $koneksi->query("UPDATE equipment_items SET status = 'available' WHERE id = $item_id");
+    }
+    $stmt_get_item->close();
+
+    // C. Hapus data transaksi utama
+    // (Data di rental_items akan ikut terhapus otomatis karena fitur ON DELETE CASCADE di database)
+    $stmt_del = $koneksi->prepare("DELETE FROM rentals WHERE id_rentals = ?");
+    $stmt_del->bind_param("i", $rental_id);
+
+    if ($stmt_del->execute()) {
+        $pesan_sukses = "Data transaksi #$rental_id berhasil dihapus permanen & stok dikembalikan!";
+    } else {
+        $pesan_error = "Gagal menghapus transaksi.";
+    }
+    $stmt_del->close();
+}
+
+// 4. AMBIL DATA PESANAN
 $query = "SELECT rentals.*, users.full_name, users.phone_number, users.email 
           FROM rentals 
           JOIN users ON rentals.user_id = users.id_users 
@@ -40,178 +67,252 @@ $result = $koneksi->query($query);
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Kelola Pesanan - Admin Panel</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Admin - Pesanan</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
-        /* CSS Reset & Basic Style */
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Poppins', sans-serif; }
-        body { background-color: #f4f6f8; color: #333; }
-
-        /* Header / Navbar Admin */
-        .admin-header {
-            background-color: #2c3e50;
-            color: white;
-            padding: 15px 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        /* --- CSS RESET & VARIABLES --- */
+        :root {
+            --sidebar-bg: #0f172a; 
+            --sidebar-hover: #1e293b; 
+            --bg-main: #f8fafc; 
+            --card-bg: #ffffff;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --primary: #d35400; 
+            --border-soft: #e2e8f0;
+            --radius-lg: 16px;
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
         }
-        .admin-header h2 { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-        .admin-nav a {
-            color: #bdc3c7;
-            text-decoration: none;
-            margin-left: 20px;
-            font-size: 14px;
-            transition: 0.3s;
-        }
-        .admin-nav a:hover, .admin-nav a.active { color: #f39c12; font-weight: bold; }
 
-        /* Container Utama */
-        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-dark); display: flex; min-height: 100vh; overflow-x: hidden; }
+
+        /* --- SIDEBAR LAYOUT --- */
+        .sidebar {
+            width: 260px; background-color: var(--sidebar-bg); color: white; display: flex; flex-direction: column;
+            position: fixed; top: 0; bottom: 0; left: 0; z-index: 100;
+        }
+
+        .sidebar-brand {
+            padding: 25px 20px; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px;
+            border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 12px;
+        }
+        .sidebar-brand i { color: var(--primary); font-size: 1.5rem; }
+
+        .sidebar-nav { padding: 20px 15px; flex: 1; list-style: none; }
+        .sidebar-nav li { margin-bottom: 8px; }
+        .sidebar-nav a {
+            display: flex; align-items: center; gap: 12px; padding: 12px 15px; color: #cbd5e1; text-decoration: none;
+            border-radius: 10px; font-weight: 600; font-size: 0.95rem; transition: 0.3s;
+        }
+        .sidebar-nav a:hover { background-color: var(--sidebar-hover); color: white; }
+        .sidebar-nav a.active { background-color: var(--primary); color: white; box-shadow: 0 4px 10px rgba(211,84,0,0.3); }
+        .sidebar-nav a i { width: 20px; text-align: center; font-size: 1.1rem; }
+
+        .sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.05); }
+        .sidebar-footer a { color: #ef4444; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+
+        /* --- MAIN CONTENT --- */
+        .main-content { flex: 1; margin-left: 260px; padding: 40px; width: calc(100% - 260px); }
+
+        .top-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .top-header h1 { font-size: 1.8rem; font-weight: 800; color: var(--text-dark); }
+        .top-header p { color: var(--text-muted); margin-top: 5px; font-size: 0.95rem; }
         
-        .card {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            overflow: hidden; /* Agar sudut tabel tumpul */
-            padding: 20px;
+        /* Alert Info */
+        .alert-toast { padding: 15px 20px; border-radius: 10px; font-weight: 600; margin-bottom: 25px; display: flex; align-items: center; gap: 10px; }
+        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .alert-error { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+
+        /* --- TABLE CARD MODERN --- */
+        .card-table { background: var(--card-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); border: 1px solid var(--border-soft); overflow: hidden; }
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        
+        thead { background-color: #f8fafc; border-bottom: 2px solid var(--border-soft); }
+        th { padding: 18px 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+        
+        td { padding: 20px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tbody tr { transition: 0.2s; }
+        tbody tr:hover { background-color: #f8fafc; }
+
+        .order-id { font-weight: 800; color: var(--text-dark); font-size: 1rem; }
+        .user-name { font-weight: 700; color: var(--text-dark); font-size: 0.95rem; display: block; margin-bottom: 4px; }
+        .user-address { font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: flex-start; gap: 5px; line-height: 1.4; max-width: 250px; }
+        
+        .date-block { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; }
+        .date-block strong { color: var(--text-dark); font-weight: 600; }
+        .price-tag { font-weight: 800; color: #059669; font-size: 1.1rem; }
+
+        .btn-wa { display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; color: #059669; padding: 6px 12px; border-radius: 50px; font-size: 0.8rem; font-weight: 600; text-decoration: none; margin-top: 10px; border: 1px solid #a7f3d0; transition: 0.3s; }
+        .btn-wa:hover { background: #d1fae5; }
+
+        /* --- SOFT BADGES --- */
+        .badge { padding: 6px 12px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
+        .bg-pending { background: #fef3c7; color: #d97706; }
+        .bg-approved { background: #e0f2fe; color: #0284c7; }
+        .bg-on_rent { background: #f3e8ff; color: #9333ea; }
+        .bg-returned { background: #dcfce7; color: #166534; }
+        .bg-cancelled { background: #fee2e2; color: #dc2626; }
+
+        /* --- MODERN ACTION FORM --- */
+        .action-flex { display: flex; align-items: center; gap: 8px; }
+        .select-modern {
+            padding: 8px 12px; border: 1px solid var(--border-soft); border-radius: 8px;
+            background: white; font-size: 0.85rem; font-weight: 600; color: var(--text-dark);
+            cursor: pointer; outline: none; transition: 0.3s; font-family: inherit;
         }
-
-        h3.page-title { margin-bottom: 20px; color: #2c3e50; border-left: 5px solid #f39c12; padding-left: 15px; }
-
-        /* Styling Tabel */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
-        th { background-color: #34495e; color: white; font-weight: 500; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; }
-        tr:hover { background-color: #f9f9f9; }
-
-        /* Status Badges */
-        .badge { padding: 6px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; color: white; display: inline-block; }
-        .bg-pending { background-color: #f39c12; }   /* Kuning */
-        .bg-approved { background-color: #3498db; }  /* Biru Muda */
-        .bg-on_rent { background-color: #9b59b6; }   /* Ungu */
-        .bg-returned { background-color: #27ae60; }  /* Hijau */
-        .bg-cancelled { background-color: #e74c3c; } /* Merah */
-
-        /* Form Update Status */
-        .action-form { display: flex; gap: 8px; align-items: center; }
-        select.status-select {
-            padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px; cursor: pointer;
+        .select-modern:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(211,84,0,0.1); }
+        
+        .btn-save-status {
+            background: var(--text-dark); color: white; border: none; width: 34px; height: 34px;
+            border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s;
         }
-        .btn-update {
-            background: #27ae60; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; transition: 0.3s;
-        }
-        .btn-update:hover { background: #219150; }
+        .btn-save-status:hover { background: var(--primary); transform: translateY(-2px); box-shadow: 0 4px 6px rgba(211,84,0,0.2); }
 
-        /* Link WhatsApp */
-        .wa-btn {
-            color: #25d366; font-weight: 600; text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; margin-top: 5px;
+        /* Tombol Delete Baru */
+        .btn-delete-status {
+            background: #fee2e2; color: #dc2626; border: none; width: 34px; height: 34px;
+            border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s;
         }
-        .wa-btn:hover { text-decoration: underline; }
+        .btn-delete-status:hover { background: #ef4444; color: white; transform: translateY(-2px); box-shadow: 0 4px 6px rgba(239,68,68,0.2); }
 
-        /* Responsive Table */
-        @media (max-width: 768px) {
-            .admin-header { flex-direction: column; gap: 15px; }
-            th, td { padding: 10px; font-size: 12px; }
-            .action-form { flex-direction: column; align-items: stretch; }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state i { font-size: 3rem; margin-bottom: 15px; color: #cbd5e1; }
+
+        @media (max-width: 1024px) {
+            .sidebar { width: 80px; }
+            .sidebar-brand span, .sidebar-nav span { display: none; }
+            .sidebar-brand i { margin: 0 auto; }
+            .main-content { margin-left: 80px; width: calc(100% - 80px); padding: 20px; }
+            .user-address { max-width: 100%; }
         }
     </style>
 </head>
 <body>
 
-    <header class="admin-header">
-        <h2><i class="fas fa-clipboard-list"></i> Admin Pesanan</h2>
-        <nav class="admin-nav">
-            <a href="admin_pesanan.php" class="active">Pesanan</a>
-            <a href="admin_produk.php">Kelola Produk</a> <a href="index.php" target="_blank">Lihat Website</a>
-            <a href="logout.php" style="color: #e74c3c;">Logout</a>
-        </nav>
-    </header>
-
-    <div class="container">
-        <h3 class="page-title">Daftar Transaksi Masuk</h3>
-
-        <div class="card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Penyewa Info</th>
-                        <th>Jadwal & Biaya</th>
-                        <th>Status Saat Ini</th>
-                        <th>Ubah Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if ($result->num_rows > 0): ?>
-                        <?php while($row = $result->fetch_assoc()): ?>
-                        <tr>
-                            <td><strong>#<?php echo $row['id_rentals']; ?></strong></td>
-                            
-                            <td>
-                                <strong><?php echo htmlspecialchars($row['full_name']); ?></strong><br>
-                                <span style="font-size: 12px; color: #777;">
-                                    <i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($row['delivery_address']); ?>
-                                </span><br>
-                                
-                                <?php if(!empty($row['phone_number'])): ?>
-                                    <a href="https://wa.me/<?php echo $row['phone_number']; ?>?text=Halo%20kak,%20saya%20Admin%20Rental%20Outdoor%20mau%20konfirmasi%20pesanan%20#<?php echo $row['id_rentals']; ?>" target="_blank" class="wa-btn">
-                                        <i class="fab fa-whatsapp"></i> Hubungi WA
-                                    </a>
-                                <?php else: ?>
-                                    <span style="font-size:12px; color:red;">No HP Kosong</span>
-                                <?php endif; ?>
-                            </td>
-
-                            <td>
-                                <div style="font-size: 13px;">
-                                    Mulai: <b><?php echo date('d M Y', strtotime($row['start_date'])); ?></b><br>
-                                    Selesai: <b><?php echo date('d M Y', strtotime($row['end_date'])); ?></b>
-                                </div>
-                                <div style="margin-top: 5px; color: #27ae60; font-weight: bold;">
-                                    Rp <?php echo number_format($row['total_price'], 0, ',', '.'); ?>
-                                </div>
-                            </td>
-
-                            <td>
-                                <span class="badge bg-<?php echo $row['status']; ?>">
-                                    <?php echo $row['status']; ?>
-                                </span>
-                            </td>
-
-                            <td>
-                                <form method="POST" class="action-form">
-                                    <input type="hidden" name="rental_id" value="<?php echo $row['id_rentals']; ?>">
-                                    
-                                    <select name="status" class="status-select">
-                                        <option value="pending" <?php echo ($row['status'] == 'pending') ? 'selected' : ''; ?>>Pending</option>
-                                        <option value="approved" <?php echo ($row['status'] == 'approved') ? 'selected' : ''; ?>>Setujui</option>
-                                        <option value="on_rent" <?php echo ($row['status'] == 'on_rent') ? 'selected' : ''; ?>>Sedang Disewa</option>
-                                        <option value="returned" <?php echo ($row['status'] == 'returned') ? 'selected' : ''; ?>>Selesai/Kembali</option>
-                                        <option value="cancelled" <?php echo ($row['status'] == 'cancelled') ? 'selected' : ''; ?>>Batalkan</option>
-                                    </select>
-
-                                    <button type="submit" name="update_status" class="btn-update" title="Simpan">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        <?php endwhile; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="5" style="text-align: center; padding: 30px; color: #777;">
-                                Belum ada pesanan masuk.
-                            </td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-mountain"></i>
+            <span>Se7en Admin</span>
         </div>
-    </div>
+        <ul class="sidebar-nav">
+            <li><a href="admin_pesanan.php" class="active"><i class="fas fa-clipboard-list"></i> <span>Pesanan Masuk</span></a></li>
+            <li><a href="admin_produk.php"><i class="fas fa-box-open"></i> <span>Katalog Gear</span></a></li>
+            <li><a href="index.php" target="_blank"><i class="fas fa-external-link-alt"></i> <span>Lihat Website</span></a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Keluar Sistem</span></a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        
+        <div class="top-header">
+            <div>
+                <h1>Manajemen Pesanan</h1>
+                <p>Pantau dan kelola seluruh transaksi penyewaan pelanggan di sini.</p>
+            </div>
+        </div>
+
+        <?php if(isset($pesan_sukses)): ?>
+            <div class="alert-toast alert-success"><i class="fas fa-check-circle"></i> <?php echo $pesan_sukses; ?></div>
+        <?php endif; ?>
+        
+        <?php if(isset($pesan_error)): ?>
+            <div class="alert-toast alert-error"><i class="fas fa-exclamation-triangle"></i> <?php echo $pesan_error; ?></div>
+        <?php endif; ?>
+
+        <div class="card-table">
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID Transaksi</th>
+                            <th>Informasi Penyewa</th>
+                            <th>Jadwal & Tagihan</th>
+                            <th>Status Saat Ini</th>
+                            <th>Aksi Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if ($result->num_rows > 0): ?>
+                            <?php while($row = $result->fetch_assoc()): ?>
+                            <tr>
+                                <td>
+                                    <span class="order-id">#RNT-<?php echo str_pad($row['id_rentals'], 4, '0', STR_PAD_LEFT); ?></span>
+                                </td>
+                                
+                                <td>
+                                    <span class="user-name"><?php echo htmlspecialchars($row['full_name']); ?></span>
+                                    <div class="user-address">
+                                        <i class="fas fa-map-marker-alt" style="margin-top: 3px; color: #94a3b8;"></i> 
+                                        <?php echo htmlspecialchars($row['delivery_address']); ?>
+                                    </div>
+                                    
+                                    <?php if(!empty($row['phone_number'])): ?>
+                                        <a href="https://wa.me/<?php echo $row['phone_number']; ?>?text=Halo%20kak%20<?php echo urlencode($row['full_name']); ?>,%20saya%20Admin%20Se7en%20Summits%20mengonfirmasi%20pesanan%20%23RNT-<?php echo str_pad($row['id_rentals'], 4, '0', STR_PAD_LEFT); ?>" target="_blank" class="btn-wa">
+                                            <i class="fab fa-whatsapp"></i> Chat WA
+                                        </a>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td>
+                                    <div class="date-block">Ambil: <strong><?php echo date('d M Y', strtotime($row['start_date'])); ?></strong></div>
+                                    <div class="date-block">Kembali: <strong><?php echo date('d M Y', strtotime($row['end_date'])); ?></strong></div>
+                                    <div class="price-tag">Rp <?php echo number_format($row['total_price'], 0, ',', '.'); ?></div>
+                                </td>
+
+                                <td>
+                                    <span class="badge bg-<?php echo $row['status']; ?>">
+                                        <?php echo str_replace('_', ' ', $row['status']); ?>
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <form method="POST" class="action-flex">
+                                        <input type="hidden" name="rental_id" value="<?php echo $row['id_rentals']; ?>">
+                                        
+                                        <select name="status" class="select-modern">
+                                            <option value="pending" <?php echo ($row['status'] == 'pending') ? 'selected' : ''; ?>>Pending</option>
+                                            <option value="approved" <?php echo ($row['status'] == 'approved') ? 'selected' : ''; ?>>Approved</option>
+                                            <option value="on_rent" <?php echo ($row['status'] == 'on_rent') ? 'selected' : ''; ?>>On Rent</option>
+                                            <option value="returned" <?php echo ($row['status'] == 'returned') ? 'selected' : ''; ?>>Returned</option>
+                                            <option value="cancelled" <?php echo ($row['status'] == 'cancelled') ? 'selected' : ''; ?>>Cancelled</option>
+                                        </select>
+
+                                        <button type="submit" name="update_status" class="btn-save-status" title="Simpan Perubahan">
+                                            <i class="fas fa-save"></i>
+                                        </button>
+                                        
+                                        <button type="submit" name="delete_order" class="btn-delete-status" title="Hapus Transaksi Permanen" onclick="return confirm('Peringatan: Yakin ingin menghapus transaksi #RNT-<?php echo str_pad($row['id_rentals'], 4, '0', STR_PAD_LEFT); ?> secara permanen? Stok barang fisik otomatis akan kembali ke gudang.');">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="5">
+                                    <div class="empty-state">
+                                        <i class="fas fa-inbox"></i>
+                                        <h3>Belum Ada Transaksi</h3>
+                                        <p>Saat ini belum ada pesanan yang masuk dari pelanggan.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
 
 </body>
 </html>

@@ -58,7 +58,7 @@ $is_logged_in = isset($_SESSION['user_id']);
             box-shadow: 0 5px 25px rgba(0,0,0,0.05);
             overflow: hidden;
             display: flex;
-            flex-wrap: wrap; /* Agar responsif di HP */
+            flex-wrap: wrap; 
         }
 
         /* Bagian Kiri: Gambar */
@@ -126,19 +126,21 @@ $is_logged_in = isset($_SESSION['user_id']);
             cursor: pointer;
             transition: 0.3s;
         }
-        .btn-sewa:hover { background: #d35400; }
+        .btn-sewa:hover:not(:disabled) { background: #d35400; }
         
-        .btn-disabled { background: #ccc; cursor: not-allowed; }
+        /* Tombol ketika dinonaktifkan (Disabled) */
+        .btn-disabled { background: #cbd5e1 !important; color: #94a3b8 !important; cursor: not-allowed !important; box-shadow: none !important; }
 
         .total-price {
             text-align: center;
             margin-top: 15px;
             font-weight: bold;
             color: var(--dark);
-            display: none; /* Sembunyikan dulu sampai dihitung */
+            display: none; 
         }
 
-        /* Responsif HP */
+        .error-date { color: #e74c3c; font-size: 12px; text-align: center; display: none; font-weight: 600; margin-top: 10px; }
+
         @media (max-width: 768px) {
             .detail-card { flex-direction: column; }
             .img-section img { min-height: 250px; max-height: 300px; }
@@ -155,11 +157,11 @@ $is_logged_in = isset($_SESSION['user_id']);
     <div class="container">
         <div class="detail-card">
             <div class="img-section">
-                <img src="<?php echo !empty($produk['main_image_url']) ? $produk['main_image_url'] : 'https://via.placeholder.com/500x500?text=No+Image'; ?>" alt="Foto Produk">
+                <img src="<?php echo !empty($produk['main_image_url']) ? htmlspecialchars($produk['main_image_url']) : 'https://via.placeholder.com/500x500?text=No+Image'; ?>" alt="Foto Produk">
             </div>
 
             <div class="info-section">
-                <span class="category-badge">Outdoor Gear</span>
+                <span class="category-badge"><?php echo ($produk['rent_type'] ?? 'item') == 'package' ? 'Paket Sewa' : 'Outdoor Gear'; ?></span>
                 <h1 class="product-title"><?php echo htmlspecialchars($produk['name']); ?></h1>
                 <div class="product-price">Rp <?php echo number_format($produk['rate_per_day'], 0, ',', '.'); ?> <span style="font-size: 14px; color: #888; font-weight: normal;">/ Hari</span></div>
                 
@@ -170,7 +172,7 @@ $is_logged_in = isset($_SESSION['user_id']);
 
                 <div class="rental-form">
                     <?php if ($is_logged_in): ?>
-                        <form action="checkout.php" method="GET">
+                        <form action="checkout.php" method="GET" id="form-sewa">
                             <input type="hidden" name="product" value="<?php echo $id; ?>">
                             
                             <div class="form-row">
@@ -184,11 +186,13 @@ $is_logged_in = isset($_SESSION['user_id']);
                                 </div>
                             </div>
 
+                            <div id="error_msg" class="error-date">Tanggal selesai tidak boleh lebih awal dari tanggal mulai!</div>
+
                             <div id="estimasi" class="total-price">
                                 Total: Rp <span id="total_nominal">0</span>
                             </div>
 
-                            <button type="submit" class="btn-sewa" style="margin-top: 15px;">
+                            <button type="submit" id="btn_submit_sewa" class="btn-sewa btn-disabled" style="margin-top: 15px;" disabled>
                                 <i class="fas fa-shopping-cart"></i> Lanjut ke Pembayaran
                             </button>
                         </form>
@@ -209,33 +213,56 @@ $is_logged_in = isset($_SESSION['user_id']);
         const endInput = document.getElementById('end_date');
         const totalDisplay = document.getElementById('total_nominal');
         const estimasiBox = document.getElementById('estimasi');
+        const btnSubmit = document.getElementById('btn_submit_sewa');
+        const errorMsg = document.getElementById('error_msg');
 
         function hitungTotal() {
+            // 1. Kunci input "Selesai Sewa" agar tidak bisa pilih tanggal sebelum "Mulai Sewa"
+            if (startInput.value) {
+                endInput.min = startInput.value; 
+            }
+
+            // 2. Jika kedua tanggal sudah diisi
             if(startInput.value && endInput.value) {
                 const start = new Date(startInput.value);
                 const end = new Date(endInput.value);
                 
-                // Hitung selisih waktu
-                const diffTime = Math.abs(end - start);
-                // Ubah ke hari (minimal 1 hari)
-                let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                
-                if (diffDays < 1) diffDays = 1; // Jika hari sama, dihitung 1 hari
-                
-                // Validasi tanggal
+                // Validasi Mundur
                 if (end < start) {
+                    // Sembunyikan harga, munculkan pesan error, matikan tombol
                     estimasiBox.style.display = 'none';
+                    errorMsg.style.display = 'block';
+                    btnSubmit.disabled = true;
+                    btnSubmit.classList.add('btn-disabled');
                     return;
+                } else {
+                    // Jika benar, hidupkan tombol, sembunyikan error
+                    errorMsg.style.display = 'none';
+                    btnSubmit.disabled = false;
+                    btnSubmit.classList.remove('btn-disabled');
                 }
 
+                // Hitung selisih waktu
+                const diffTime = Math.abs(end - start);
+                let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                
+                if (diffDays < 1) diffDays = 1; // Jika di hari yang sama, minimal 1 hari
+                
                 const total = diffDays * ratePerDay;
                 
-                // Format Rupiah
+                // Tampilkan Harga
                 totalDisplay.innerText = new Intl.NumberFormat('id-ID').format(total);
                 estimasiBox.style.display = 'block';
+            } else {
+                // Jika input masih kosong, biarkan tombol mati
+                btnSubmit.disabled = true;
+                btnSubmit.classList.add('btn-disabled');
+                estimasiBox.style.display = 'none';
+                errorMsg.style.display = 'none';
             }
         }
 
+        // Panggil fungsi setiap kali pengguna mengganti tanggal
         if(startInput && endInput) {
             startInput.addEventListener('change', hitungTotal);
             endInput.addEventListener('change', hitungTotal);
