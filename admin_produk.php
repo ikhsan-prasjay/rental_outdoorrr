@@ -10,7 +10,6 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 }
 
 // Ambil semua data produk beserta jumlah stok fisik yang statusnya 'available'
-// Menggunakan Subquery agar aman dari error strict mode
 $query = "SELECT p.*, 
           (SELECT COUNT(*) FROM equipment_items WHERE product_id = p.id_equipment AND status = 'available') as stok_tersedia 
           FROM equipment_products p 
@@ -28,7 +27,7 @@ $result = $koneksi->query($query);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
-        /* --- CSS RESET & VARIABLES (Sama dengan admin_pesanan) --- */
+        /* --- CSS RESET & VARIABLES --- */
         :root {
             --sidebar-bg: #0f172a; 
             --sidebar-hover: #1e293b; 
@@ -47,9 +46,8 @@ $result = $koneksi->query($query);
 
         /* --- SIDEBAR LAYOUT --- */
         .sidebar {
-            width: 260px; background-color: var(--sidebar-bg); color: white;
-            display: flex; flex-direction: column; position: fixed;
-            top: 0; bottom: 0; left: 0; z-index: 100;
+            width: 260px; background-color: var(--sidebar-bg); color: white; display: flex; flex-direction: column;
+            position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .sidebar-brand {
@@ -61,8 +59,8 @@ $result = $koneksi->query($query);
         .sidebar-nav { padding: 20px 15px; flex: 1; list-style: none; }
         .sidebar-nav li { margin-bottom: 8px; }
         .sidebar-nav a {
-            display: flex; align-items: center; gap: 12px; padding: 12px 15px; color: #cbd5e1; 
-            text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 0.95rem; transition: 0.3s;
+            display: flex; align-items: center; gap: 12px; padding: 12px 15px; color: #cbd5e1; text-decoration: none;
+            border-radius: 10px; font-weight: 600; font-size: 0.95rem; transition: 0.3s;
         }
         .sidebar-nav a:hover { background-color: var(--sidebar-hover); color: white; }
         .sidebar-nav a.active { background-color: var(--primary); color: white; box-shadow: 0 4px 10px rgba(211,84,0,0.3); }
@@ -72,9 +70,7 @@ $result = $koneksi->query($query);
         .sidebar-footer a { color: #ef4444; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 10px; }
 
         /* --- MAIN CONTENT --- */
-        .main-content {
-            flex: 1; margin-left: 260px; padding: 40px; width: calc(100% - 260px);
-        }
+        .main-content { flex: 1; margin-left: 260px; padding: 40px; width: calc(100% - 260px); transition: margin-left 0.3s, width 0.3s; }
 
         .top-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; }
         .top-header h1 { font-size: 1.8rem; font-weight: 800; color: var(--text-dark); }
@@ -83,7 +79,7 @@ $result = $koneksi->query($query);
         .btn-add-primary {
             background: var(--primary); color: white; padding: 12px 24px; border-radius: 10px;
             font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 8px;
-            transition: 0.3s; box-shadow: 0 4px 12px rgba(211,84,0,0.2);
+            transition: 0.3s; box-shadow: 0 4px 12px rgba(211,84,0,0.2); white-space: nowrap;
         }
         .btn-add-primary:hover { background: #b04600; transform: translateY(-2px); }
 
@@ -93,32 +89,29 @@ $result = $koneksi->query($query);
         table { width: 100%; border-collapse: collapse; text-align: left; }
         
         thead { background-color: #f8fafc; border-bottom: 2px solid var(--border-soft); }
-        th { padding: 18px 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+        th { padding: 18px 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); white-space: nowrap; }
         td { padding: 20px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
         tbody tr { transition: 0.2s; }
         tbody tr:hover { background-color: #f8fafc; }
 
-        /* Product Display in Table */
-        .product-cell { display: flex; align-items: center; gap: 15px; }
-        .img-thumb { width: 65px; height: 65px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border-soft); background: #f0f0f0; }
+        .product-cell { display: flex; align-items: center; gap: 15px; min-width: 250px; }
+        .img-thumb { width: 65px; height: 65px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border-soft); background: #f0f0f0; flex-shrink: 0; }
         .product-info h4 { font-size: 1rem; color: var(--text-dark); font-weight: 700; margin-bottom: 4px; }
-        .product-info .meta { font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 10px; align-items: center;}
+        .product-info .meta { font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 10px; align-items: center; white-space: nowrap; }
         
-        /* Badges */
         .type-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
         .type-item { background: #e0f2fe; color: #0284c7; }
         .type-package { background: #fef3c7; color: #d97706; }
 
-        .stock-badge { padding: 6px 12px; border-radius: 50px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+        .stock-badge { padding: 6px 12px; border-radius: 50px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
         .stock-ready { background: #dcfce7; color: #166534; }
         .stock-empty { background: #fee2e2; color: #dc2626; }
 
-        .price-tag { font-weight: 800; color: var(--text-dark); font-size: 1.05rem; }
+        .price-tag { font-weight: 800; color: var(--text-dark); font-size: 1.05rem; white-space: nowrap; }
         .price-tag span { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
 
-        /* Action Buttons */
         .action-flex { display: flex; gap: 8px; }
-        .btn-icon { width: 35px; height: 35px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; transition: 0.3s; }
+        .btn-icon { width: 35px; height: 35px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; transition: 0.3s; flex-shrink: 0; }
         .btn-edit { background: #f59e0b; }
         .btn-edit:hover { background: #d97706; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); }
         .btn-delete { background: #ef4444; }
@@ -127,16 +120,40 @@ $result = $koneksi->query($query);
         .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
         .empty-state i { font-size: 3rem; margin-bottom: 15px; color: #cbd5e1; }
 
+        /* --- RESPONSIVE MOBILE --- */
+        .mobile-admin-toggle {
+            display: none; background: var(--primary); color: white; border: none;
+            width: 40px; height: 40px; border-radius: 8px; font-size: 1.2rem; cursor: pointer;
+        }
+        .admin-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);
+            z-index: 90; display: none; opacity: 0; transition: 0.3s;
+        }
+
         @media (max-width: 1024px) {
             .sidebar { width: 80px; }
             .sidebar-brand span, .sidebar-nav span { display: none; }
             .sidebar-brand i { margin: 0 auto; }
             .main-content { margin-left: 80px; width: calc(100% - 80px); padding: 20px; }
-            .top-header { flex-direction: column; align-items: flex-start; gap: 15px; }
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-admin-toggle { display: block; }
+            .sidebar { transform: translateX(-100%); width: 260px !important; }
+            .sidebar.active { transform: translateX(0); }
+            .admin-overlay.active { display: block; opacity: 1; }
+            .sidebar-brand span, .sidebar-nav span { display: inline-block !important; }
+            .main-content { margin-left: 0 !important; width: 100% !important; padding: 20px !important; }
+            .top-header { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; }
+            .top-header h1 { font-size: 1.4rem; margin-bottom: 0; }
+            .top-header p { display: none; }
+            .btn-add-primary { padding: 10px 15px; font-size: 0.85rem; }
         }
     </style>
 </head>
 <body>
+
+    <div class="admin-overlay"></div>
 
     <aside class="sidebar">
         <div class="sidebar-brand">
@@ -240,6 +257,30 @@ $result = $koneksi->query($query);
         </div>
 
     </main>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const topHeader = document.querySelector('.top-header');
+            if (topHeader && window.innerWidth <= 768) {
+                // Buat tombol burger
+                const btn = document.createElement('button');
+                btn.className = 'mobile-admin-toggle';
+                btn.innerHTML = '<i class="fas fa-bars"></i>';
+                topHeader.prepend(btn);
+
+                const overlay = document.querySelector('.admin-overlay');
+                const sidebar = document.querySelector('.sidebar');
+                
+                function toggleAdminSidebar() {
+                    sidebar.classList.toggle('active');
+                    overlay.classList.toggle('active');
+                }
+
+                btn.addEventListener('click', toggleAdminSidebar);
+                overlay.addEventListener('click', toggleAdminSidebar);
+            }
+        });
+    </script>
 
 </body>
 </html>

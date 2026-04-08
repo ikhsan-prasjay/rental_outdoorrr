@@ -25,17 +25,17 @@ if (isset($_POST['update_status'])) {
     $stmt->close();
 }
 
-// 3. PROSES HAPUS TRANSAKSI (NEW FEATURE)
+// 3. PROSES HAPUS TRANSAKSI 
 if (isset($_POST['delete_order'])) {
     $rental_id = intval($_POST['rental_id']);
 
-    // A. Ambil semua item_id yang terkait dengan transaksi ini
+    // A. Ambil semua item_id yang terkait
     $stmt_get_item = $koneksi->prepare("SELECT item_id FROM rental_items WHERE rental_id = ?");
     $stmt_get_item->bind_param("i", $rental_id);
     $stmt_get_item->execute();
     $res_item = $stmt_get_item->get_result();
 
-    // B. Kembalikan status barang fisik menjadi 'available' (Tersedia)
+    // B. Kembalikan status barang fisik menjadi 'available'
     while ($item = $res_item->fetch_assoc()) {
         $item_id = $item['item_id'];
         $koneksi->query("UPDATE equipment_items SET status = 'available' WHERE id = $item_id");
@@ -43,7 +43,6 @@ if (isset($_POST['delete_order'])) {
     $stmt_get_item->close();
 
     // C. Hapus data transaksi utama
-    // (Data di rental_items akan ikut terhapus otomatis karena fitur ON DELETE CASCADE di database)
     $stmt_del = $koneksi->prepare("DELETE FROM rentals WHERE id_rentals = ?");
     $stmt_del->bind_param("i", $rental_id);
 
@@ -93,7 +92,7 @@ $result = $koneksi->query($query);
         /* --- SIDEBAR LAYOUT --- */
         .sidebar {
             width: 260px; background-color: var(--sidebar-bg); color: white; display: flex; flex-direction: column;
-            position: fixed; top: 0; bottom: 0; left: 0; z-index: 100;
+            position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .sidebar-brand {
@@ -116,7 +115,7 @@ $result = $koneksi->query($query);
         .sidebar-footer a { color: #ef4444; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 10px; }
 
         /* --- MAIN CONTENT --- */
-        .main-content { flex: 1; margin-left: 260px; padding: 40px; width: calc(100% - 260px); }
+        .main-content { flex: 1; margin-left: 260px; padding: 40px; width: calc(100% - 260px); transition: margin-left 0.3s, width 0.3s; }
 
         .top-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
         .top-header h1 { font-size: 1.8rem; font-weight: 800; color: var(--text-dark); }
@@ -133,7 +132,7 @@ $result = $koneksi->query($query);
         table { width: 100%; border-collapse: collapse; text-align: left; }
         
         thead { background-color: #f8fafc; border-bottom: 2px solid var(--border-soft); }
-        th { padding: 18px 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+        th { padding: 18px 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); white-space: nowrap; }
         
         td { padding: 20px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
         tr:last-child td { border-bottom: none; }
@@ -144,15 +143,15 @@ $result = $koneksi->query($query);
         .user-name { font-weight: 700; color: var(--text-dark); font-size: 0.95rem; display: block; margin-bottom: 4px; }
         .user-address { font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: flex-start; gap: 5px; line-height: 1.4; max-width: 250px; }
         
-        .date-block { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; }
+        .date-block { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; white-space: nowrap; }
         .date-block strong { color: var(--text-dark); font-weight: 600; }
         .price-tag { font-weight: 800; color: #059669; font-size: 1.1rem; }
 
-        .btn-wa { display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; color: #059669; padding: 6px 12px; border-radius: 50px; font-size: 0.8rem; font-weight: 600; text-decoration: none; margin-top: 10px; border: 1px solid #a7f3d0; transition: 0.3s; }
+        .btn-wa { display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; color: #059669; padding: 6px 12px; border-radius: 50px; font-size: 0.8rem; font-weight: 600; text-decoration: none; margin-top: 10px; border: 1px solid #a7f3d0; transition: 0.3s; white-space: nowrap; }
         .btn-wa:hover { background: #d1fae5; }
 
         /* --- SOFT BADGES --- */
-        .badge { padding: 6px 12px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
+        .badge { padding: 6px 12px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; white-space: nowrap; }
         .bg-pending { background: #fef3c7; color: #d97706; }
         .bg-approved { background: #e0f2fe; color: #0284c7; }
         .bg-on_rent { background: #f3e8ff; color: #9333ea; }
@@ -170,30 +169,53 @@ $result = $koneksi->query($query);
         
         .btn-save-status {
             background: var(--text-dark); color: white; border: none; width: 34px; height: 34px;
-            border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s;
+            border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; flex-shrink: 0;
         }
         .btn-save-status:hover { background: var(--primary); transform: translateY(-2px); box-shadow: 0 4px 6px rgba(211,84,0,0.2); }
 
-        /* Tombol Delete Baru */
         .btn-delete-status {
             background: #fee2e2; color: #dc2626; border: none; width: 34px; height: 34px;
-            border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s;
+            border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; flex-shrink: 0;
         }
         .btn-delete-status:hover { background: #ef4444; color: white; transform: translateY(-2px); box-shadow: 0 4px 6px rgba(239,68,68,0.2); }
 
         .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
         .empty-state i { font-size: 3rem; margin-bottom: 15px; color: #cbd5e1; }
 
+        /* --- RESPONSIVE MOBILE --- */
+        .mobile-admin-toggle {
+            display: none; background: var(--primary); color: white; border: none;
+            width: 40px; height: 40px; border-radius: 8px; font-size: 1.2rem; cursor: pointer;
+        }
+        .admin-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);
+            z-index: 90; display: none; opacity: 0; transition: 0.3s;
+        }
+        
         @media (max-width: 1024px) {
             .sidebar { width: 80px; }
             .sidebar-brand span, .sidebar-nav span { display: none; }
             .sidebar-brand i { margin: 0 auto; }
             .main-content { margin-left: 80px; width: calc(100% - 80px); padding: 20px; }
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-admin-toggle { display: block; }
+            .sidebar { transform: translateX(-100%); width: 260px !important; }
+            .sidebar.active { transform: translateX(0); }
+            .admin-overlay.active { display: block; opacity: 1; }
+            .sidebar-brand span, .sidebar-nav span { display: inline-block !important; }
+            .main-content { margin-left: 0 !important; width: 100% !important; padding: 20px !important; }
+            .top-header { flex-direction: row; align-items: center; justify-content: space-between; gap: 15px; }
+            .top-header h1 { font-size: 1.4rem; margin-bottom: 0; }
+            .top-header p { display: none; } 
             .user-address { max-width: 100%; }
         }
     </style>
 </head>
 <body>
+
+    <div class="admin-overlay"></div>
 
     <aside class="sidebar">
         <div class="sidebar-brand">
@@ -313,6 +335,30 @@ $result = $koneksi->query($query);
         </div>
 
     </main>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const topHeader = document.querySelector('.top-header');
+            if (topHeader && window.innerWidth <= 768) {
+                // Buat tombol burger
+                const btn = document.createElement('button');
+                btn.className = 'mobile-admin-toggle';
+                btn.innerHTML = '<i class="fas fa-bars"></i>';
+                topHeader.prepend(btn);
+
+                const overlay = document.querySelector('.admin-overlay');
+                const sidebar = document.querySelector('.sidebar');
+                
+                function toggleAdminSidebar() {
+                    sidebar.classList.toggle('active');
+                    overlay.classList.toggle('active');
+                }
+
+                btn.addEventListener('click', toggleAdminSidebar);
+                overlay.addEventListener('click', toggleAdminSidebar);
+            }
+        });
+    </script>
 
 </body>
 </html>
