@@ -41,120 +41,207 @@ $date1 = new DateTime($invoice['start_date']);
 $date2 = new DateTime($invoice['end_date']);
 $durasi = max(1, $date1->diff($date2)->days);
 
-// Status Badge
+// Hitung total akhir dengan Denda
+$denda = isset($invoice['fine_amount']) ? $invoice['fine_amount'] : 0;
+$total_keseluruhan = $invoice['total_price'] + $denda;
+
+// Status Badge Warna Modern
 $status_colors = [
-    'pending' => '#f39c12',
-    'approved' => '#3498db',
-    'on_rent' => '#9b59b6',
-    'returned' => '#2ecc71',
-    'cancelled' => '#e74c3c'
+    'pending' => 'background-color: #fef5e7; color: #f39c12;',
+    'approved' => 'background-color: #e0f2fe; color: #0284c7;',
+    'on_rent' => 'background-color: #f3e8ff; color: #9333ea;',
+    'returned' => 'background-color: #e9f7ef; color: #27ae60;',
+    'cancelled' => 'background-color: #fdeaea; color: #e74c3c;'
 ];
-$color = $status_colors[$invoice['status']] ?? '#95a5a6';
+$badge_style = $status_colors[$invoice['status']] ?? 'background-color: #f8f9fa; color: #6c757d;';
 
 // Memanggil Header UI
 require_once 'includes/header.php';
 ?>
 
-<style>
-    .invoice-container { max-width: 800px; margin: 50px auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); }
-    .invoice-header { display: flex; justify-content: space-between; border-bottom: 2px solid #f0f0f0; padding-bottom: 20px; margin-bottom: 30px; }
-    .invoice-header h2 { color: var(--primary); font-size: 2rem; margin-bottom: 5px; }
-    .invoice-id { font-size: 1.1rem; color: #7f8c8d; }
-    .status-badge { display: inline-block; padding: 8px 15px; color: white; border-radius: 50px; font-weight: bold; font-size: 0.9rem; text-transform: uppercase; background-color: <?php echo $color; ?>; }
-    
-    .invoice-details { display: flex; justify-content: space-between; margin-bottom: 30px; }
-    .detail-box { flex: 1; }
-    .detail-box h4 { color: var(--dark); margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; display: inline-block; }
-    .detail-box p { color: #555; margin-bottom: 5px; font-size: 0.95rem; }
-    
-    .item-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-    .item-table th { background: #f8f9fa; text-align: left; padding: 15px; color: var(--dark); border-bottom: 2px solid #ddd; }
-    .item-table td { padding: 15px; border-bottom: 1px solid #eee; color: #555; }
-    .total-row td { font-weight: bold; font-size: 1.2rem; color: var(--dark); border-top: 2px solid #ddd; }
-    .total-price { color: var(--primary) !important; font-size: 1.4rem; }
-    
-    .payment-info { background: #fff8f0; border-left: 4px solid var(--primary); padding: 20px; margin-bottom: 30px; border-radius: 4px; }
-    .btn-print { background: #2c3e50; color: white; border: none; padding: 12px 25px; border-radius: 5px; cursor: pointer; font-size: 1rem; transition: 0.3s; display: inline-block; }
-    .btn-print:hover { background: #1a252f; }
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    /* Mode Cetak (Sembunyikan elemen yang tidak perlu saat di-print) */
+<style>
+    :root {
+        --inv-primary: #d35400; /* Warna Oranye Se7en Summits */
+        --inv-light: #fff5eb;
+        --inv-text-main: #2c3e50;
+        --inv-text-light: #7f8c8d;
+        --inv-border: #e9ecef;
+    }
+
+    body {
+        background-color: #f8fafc;
+    }
+
+    .invoice-container {
+        font-family: 'Poppins', sans-serif;
+        max-width: 900px;
+        margin: 40px auto;
+        background-color: #ffffff;
+        padding: 50px;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        position: relative;
+        overflow: hidden;
+        color: var(--inv-text-main);
+        line-height: 1.6;
+    }
+
+    .invoice-container::before {
+        content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 6px; background-color: var(--inv-primary);
+    }
+
+    .invoice-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--inv-border); padding-bottom: 30px; margin-bottom: 40px; }
+    .brand-logo { font-size: 32px; font-weight: 700; color: var(--inv-primary); text-transform: uppercase; letter-spacing: 1px; }
+    .invoice-info { text-align: right; }
+    .invoice-info h1 { margin: 0; font-size: 24px; font-weight: 600; color: var(--inv-text-main); }
+    .invoice-info .id-num { font-size: 16px; color: var(--inv-primary); font-weight: 500; }
+    
+    .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px; }
+
+    .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 50px; }
+    .detail-group h3 { font-size: 16px; font-weight: 600; color: var(--inv-text-light); text-transform: uppercase; letter-spacing: 1px; margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid var(--inv-border); padding-bottom: 8px; }
+    .detail-group p { margin: 5px 0; font-size: 15px; }
+    .detail-group .name { font-weight: 600; font-size: 17px; color: var(--inv-text-main); }
+
+    .invoice-table { width: 100%; border-collapse: collapse; font-size: 15px; margin-bottom: 40px; }
+    .invoice-table thead th { text-align: left; padding: 15px; background-color: #f8fafc; font-weight: 600; color: var(--inv-text-main); text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; }
+    .invoice-table tbody td { padding: 18px 15px; border-bottom: 1px solid var(--inv-border); }
+    .invoice-table .numeric-col { text-align: right; }
+
+    .summary-container { display: flex; justify-content: flex-end; margin-bottom: 40px; }
+    .summary-box { width: 380px; text-align: right; font-size: 15px; }
+    .summary-row { display: flex; justify-content: space-between; padding: 10px 0; color: var(--inv-text-light); }
+    .summary-row.fine { color: #e74c3c; font-weight: 500; }
+    .summary-total { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; background-color: var(--inv-light); color: var(--inv-primary); border-radius: 8px; margin-top: 15px; font-weight: 700; font-size: 18px; }
+
+    .payment-notes { margin-bottom: 40px; background-color: #fefdfb; padding: 20px; border-radius: 8px; border-left: 4px solid var(--inv-primary); }
+    .payment-notes h4 { margin: 0 0 10px 0; color: var(--inv-text-main); font-family: 'Poppins', sans-serif;}
+    .payment-notes p { margin: 0; font-size: 14px; color: var(--inv-text-light); }
+    .payment-notes ul { margin-top: 10px; font-size: 14px; color: var(--inv-text-main); }
+
+    .invoice-footer { text-align: center; border-top: 1px solid var(--inv-border); padding-top: 30px; font-size: 14px; color: var(--inv-text-light); }
+    .btn-action { padding: 12px 25px; border-radius: 6px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: 0.3s; font-family: 'Poppins', sans-serif;}
+    .btn-print { background-color: var(--inv-text-main); color: white; border: none; }
+    .btn-print:hover { background-color: #1a252f; }
+    .btn-wa { background-color: #25d366; color: white; border: none; }
+    .btn-wa:hover { background-color: #20bd5a; }
+
     @media print {
-        .main-header, footer, .float-wa, .btn-print { display: none !important; }
-        .invoice-container { box-shadow: none; margin: 0; padding: 0; }
-        body { background: white; }
+        body { background-color: #fff; padding: 0; }
+        .main-header, footer, .float-wa, .no-print { display: none !important; }
+        .invoice-container { box-shadow: none; max-width: 100%; padding: 0; margin: 0; }
     }
 </style>
 
 <div class="invoice-container">
-    <div class="invoice-header">
-        <div>
-            <h2>INVOICE</h2>
-            <div class="invoice-id">No. Referensi: <strong>#RNT-<?php echo str_pad($invoice['id_rentals'], 5, '0', STR_PAD_LEFT); ?></strong></div>
-            <div style="margin-top: 10px;">Tanggal Terbit: <?php echo date('d M Y, H:i', strtotime($invoice['created_at'])); ?></div>
+    
+    <header class="invoice-header">
+        <div class="brand-logo">SE7EN SUMMITS</div>
+        <div class="invoice-info">
+            <h1>INVOICE</h1>
+            <p class="id-num">#RNT-<?php echo str_pad($invoice['id_rentals'], 5, '0', STR_PAD_LEFT); ?></p>
+            <p style="margin:0; font-size:13px;">Tanggal Terbit: <?php echo date('d M Y', strtotime($invoice['created_at'])); ?></p>
+            <span class="status-badge" style="<?php echo $badge_style; ?>"><?php echo str_replace('_', ' ', $invoice['status']); ?></span>
         </div>
-        <div style="text-align: right;">
-            <div style="margin-bottom: 10px;">Status Pembayaran:</div>
-            <span class="status-badge"><?php echo $invoice['status']; ?></span>
-        </div>
-    </div>
+    </header>
 
-    <div class="invoice-details">
-        <div class="detail-box">
-            <h4>Informasi Pelanggan</h4>
-            <p><strong>Nama:</strong> <?php echo htmlspecialchars($invoice['full_name'] ?? '-'); ?></p>
-            <p><strong>Email:</strong> <?php echo htmlspecialchars($invoice['email'] ?? '-'); ?></p>
-            <p><strong>Telepon:</strong> <?php echo htmlspecialchars($invoice['phone_number'] ?? 'Belum diisi'); ?></p>
-            <p><strong>Alamat Pengiriman:</strong> <?php echo nl2br(htmlspecialchars($invoice['delivery_address'] ?? '-')); ?></p>
+    <section class="details-grid">
+        <div class="detail-group">
+            <h3>DITAGIHKAN KEPADA</h3>
+            <p class="name"><?php echo htmlspecialchars($invoice['full_name'] ?? '-'); ?></p>
+            <p><?php echo htmlspecialchars($invoice['email'] ?? '-'); ?></p>
+            <p><?php echo htmlspecialchars($invoice['phone_number'] ?? 'Belum diisi'); ?></p>
+            <p style="margin-top: 10px; font-size: 13px; color: var(--inv-text-light);">
+                <strong>Alamat Pengiriman:</strong><br>
+                <?php echo nl2br(htmlspecialchars($invoice['delivery_address'] ?? '-')); ?>
+            </p>
         </div>
-        <div class="detail-box">
-            <h4>Detail Sewa</h4>
-            <p><strong>Tgl Mulai:</strong> <?php echo date('d M Y', strtotime($invoice['start_date'])); ?></p>
-            <p><strong>Tgl Selesai:</strong> <?php echo date('d M Y', strtotime($invoice['end_date'])); ?></p>
-            <p><strong>Durasi:</strong> <?php echo $durasi; ?> Hari</p>
+        <div class="detail-group">
+            <h3>RINCIAN PENYEWAAN</h3>
+            <p><strong>Tgl Pengambilan:</strong> <?php echo date('d M Y', strtotime($invoice['start_date'])); ?></p>
+            <p><strong>Batas Pengembalian:</strong> <?php echo date('d M Y', strtotime($invoice['end_date'])); ?></p>
+            <p><strong>Durasi Sepakat:</strong> <?php echo $durasi; ?> Hari</p>
+            
+            <?php if (!empty($invoice['actual_return_date'])): ?>
+                <p style="color: #27ae60; margin-top:10px;"><strong>Dikembalikan Tgl:</strong> <?php echo date('d M Y H:i', strtotime($invoice['actual_return_date'])); ?></p>
+            <?php endif; ?>
         </div>
-    </div>
+    </section>
 
-    <table class="item-table">
+    <table class="invoice-table">
         <thead>
             <tr>
-                <th>Deskripsi Produk</th>
-                <th>Harga / Hari</th>
-                <th>Durasi</th>
-                <th style="text-align: right;">Subtotal</th>
+                <th>Item / Barang</th>
+                <th class="numeric-col">Harga/Hari</th>
+                <th class="numeric-col">Durasi</th>
+                <th class="numeric-col">Subtotal</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td><?php echo htmlspecialchars($invoice['product_name']); ?></td>
-                <td>Rp <?php echo number_format($invoice['rate_per_day'], 0, ',', '.'); ?></td>
-                <td><?php echo $durasi; ?> Hari</td>
-                <td style="text-align: right;">Rp <?php echo number_format($invoice['total_price'], 0, ',', '.'); ?></td>
-            </tr>
-            <tr class="total-row">
-                <td colspan="3" style="text-align: right;">TOTAL TAGIHAN</td>
-                <td class="total-price" style="text-align: right;">Rp <?php echo number_format($invoice['total_price'], 0, ',', '.'); ?></td>
+                <td><strong><?php echo htmlspecialchars($invoice['product_name']); ?></strong></td>
+                <td class="numeric-col">Rp <?php echo number_format($invoice['rate_per_day'], 0, ',', '.'); ?></td>
+                <td class="numeric-col"><?php echo $durasi; ?> Hari</td>
+                <td class="numeric-col"><strong>Rp <?php echo number_format($invoice['total_price'], 0, ',', '.'); ?></strong></td>
             </tr>
         </tbody>
     </table>
 
-    <?php if($invoice['status'] === 'pending'): ?>
-    <div class="payment-info">
-        <h4 style="margin-bottom: 10px; color: var(--primary);">Instruksi Pembayaran</h4>
-        <p>Silakan lakukan pembayaran sebesar <strong>Rp <?php echo number_format($invoice['total_price'], 0, ',', '.'); ?></strong> ke rekening berikut:</p>
-        <ul style="list-style: none; padding-left: 0; margin-top: 10px;">
-            <li><strong>BCA:</strong> 1234-567-890 a/n Se7en Summits Outdoor</li>
-            <li><strong>Mandiri:</strong> 0987-654-321 a/n Se7en Summits Outdoor</li>
+    <section class="summary-container">
+        <div class="summary-box">
+            <div class="summary-row">
+                <span>Subtotal Sewa:</span>
+                <span>Rp <?php echo number_format($invoice['total_price'], 0, ',', '.'); ?></span>
+            </div>
+            
+            <?php if ($denda > 0): ?>
+            <div class="summary-row fine">
+                <span>Denda Keterlambatan:</span>
+                <span>+ Rp <?php echo number_format($denda, 0, ',', '.'); ?></span>
+            </div>
+            <?php endif; ?>
+
+            <div class="summary-total">
+                <span>TOTAL TAGIHAN</span>
+                <span>Rp <?php echo number_format($total_keseluruhan, 0, ',', '.'); ?></span>
+            </div>
+        </div>
+    </section>
+
+    <?php if($invoice['status'] === 'pending' || ($denda > 0 && $invoice['status'] === 'returned')): ?>
+    <section class="payment-notes no-print">
+        <h4>Catatan Pembayaran & Tagihan</h4>
+        <?php if($invoice['status'] === 'pending'): ?>
+            <p>Selesaikan pembayaran Sewa sebesar <strong>Rp <?php echo number_format($total_keseluruhan, 0, ',', '.'); ?></strong> ke rekening di bawah ini untuk memproses pesanan Anda.</p>
+        <?php elseif($denda > 0): ?>
+            <p>Pesanan telah dikembalikan namun Anda memiliki <strong>Tagihan Denda Keterlambatan sebesar Rp <?php echo number_format($denda, 0, ',', '.'); ?></strong>. Mohon segera lunasi untuk menghindari penangguhan akun Anda.</p>
+        <?php endif; ?>
+        
+        <ul style="list-style: none; padding-left: 0;">
+            <li><i class="fas fa-money-check-alt" style="color:var(--inv-primary); margin-right:5px;"></i> <strong>BCA:</strong> 1234-567-890 a/n Se7en Summits Outdoor</li>
+            <li><i class="fas fa-money-check-alt" style="color:var(--inv-primary); margin-right:5px;"></i> <strong>Mandiri:</strong> 0987-654-321 a/n Se7en Summits Outdoor</li>
         </ul>
-        <p style="margin-top: 10px; font-size: 0.9rem;">* Lakukan konfirmasi pembayaran melalui WhatsApp dengan melampirkan bukti transfer dan Nomor Referensi Invoice ini.</p>
-    </div>
+    </section>
     <?php endif; ?>
 
-    <div style="text-align: center; margin-top: 40px;">
-        <button onclick="window.print()" class="btn-print"><i class="fas fa-print"></i> Cetak / Simpan PDF</button>
-        <?php if($invoice['status'] === 'pending'): ?>
-            <a href="https://wa.me/6281234567890?text=Halo%20Se7en%20Summits,%20saya%20ingin%20konfirmasi%20pembayaran%20untuk%20Invoice%20%23RNT-<?php echo str_pad($invoice['id_rentals'], 5, '0', STR_PAD_LEFT); ?>" target="_blank" class="btn-print" style="background: #25d366; margin-left: 10px;"><i class="fab fa-whatsapp"></i> Konfirmasi ke WA</a>
-        <?php endif; ?>
-    </div>
+    <footer class="invoice-footer">
+        <p>Terima kasih telah mempercayakan petualangan Anda bersama Se7en Summits.</p>
+        <p style="font-size: 12px; margin-top:10px;">Dokumen ini dihasilkan secara otomatis oleh sistem.</p>
+        
+        <div class="no-print" style="margin-top: 30px; display:flex; justify-content:center; gap:15px;">
+            <button onclick="window.print()" class="btn-action btn-print">
+                <i class="fas fa-print"></i> Cetak / Simpan PDF
+            </button>
+            <?php if($invoice['status'] === 'pending' || $denda > 0): ?>
+                <a href="https://wa.me/6281234567890?text=Halo%20Se7en%20Summits,%20saya%20ingin%20konfirmasi%20pembayaran%20untuk%20Invoice%20%23RNT-<?php echo str_pad($invoice['id_rentals'], 5, '0', STR_PAD_LEFT); ?>" target="_blank" class="btn-action btn-wa">
+                    <i class="fab fa-whatsapp"></i> Konfirmasi via WA
+                </a>
+            <?php endif; ?>
+        </div>
+    </footer>
+
 </div>
 
 <?php 

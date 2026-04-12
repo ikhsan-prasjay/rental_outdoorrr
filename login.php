@@ -29,10 +29,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             header('Location: index.php');
             exit();
         } else {
-            $pesan_error = "Password salah.";
+            $pesan_error = "Password yang Anda masukkan salah.";
         }
     } else {
-        $pesan_error = "Email tidak ditemukan.";
+        $pesan_error = "Email tidak terdaftar di sistem kami.";
     }
     $stmt->close();
 }
@@ -44,155 +44,150 @@ $koneksi->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Rental Outdoor</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Masuk - Se7en Summits</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        /* --- INTERNAL CSS LOGIN --- */
+        :root {
+            --primary: #d35400; 
+            --primary-hover: #b04600;
+            --dark: #0f172a;
+            --text-gray: #64748b;
+            --bg-input: #f8fafc;
+            --border-input: #e2e8f0;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
         
-        body {
-            /* Background DISAMAKAN dengan Register.php */
-            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1523987355523-c7b5b0dd90a7?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80');
+        .auth-layout { display: flex; min-height: 100vh; background: white; }
+
+        /* --- SISI KIRI (BANNER) --- */
+        .auth-banner {
+            flex: 1.2;
+            /* Menggunakan gambar Bromo dari Wikimedia agar tidak diblokir localhost */
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Mount_Bromo_at_sunrise%2C_showing_its_volcanoes_and_Mount_Semeru_%28background%29.jpg/1024px-Mount_Bromo_at_sunrise%2C_showing_its_volcanoes_and_Mount_Semeru_%28background%29.jpg');
             background-size: cover;
             background-position: center;
-            height: 100vh;
+            background-repeat: no-repeat;
+            position: relative;
             display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .login-card {
-            background: rgba(255, 255, 255, 0.95); /* Putih sedikit transparan */
-            padding: 40px;
-            width: 100%;
-            max-width: 400px;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            text-align: center;
-        }
-
-        .login-card h2 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-            font-weight: 600;
-        }
-
-        .login-card p {
-            color: #7f8c8d;
-            font-size: 14px;
-            margin-bottom: 30px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-            text-align: left;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #2c3e50;
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px 15px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: 0.3s;
-        }
-
-        .form-group input:focus {
-            border-color: #e67e22; /* Warna Oranye */
-            outline: none;
-            box-shadow: 0 0 5px rgba(230, 126, 34, 0.3);
-        }
-
-        .btn-login {
-            width: 100%;
-            padding: 12px;
-            background-color: #e67e22; /* Warna Oranye Petualang */
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 60px;
             color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.3s;
+        }
+        .auth-banner::before {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(to top, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.2) 100%);
+        }
+        .banner-content { position: relative; z-index: 1; max-width: 500px; }
+        .banner-content h2 { font-size: 2.5rem; font-weight: 800; margin-bottom: 15px; line-height: 1.2; }
+        .banner-content p { font-size: 1.1rem; color: #cbd5e1; line-height: 1.6; }
+
+        /* --- SISI KANAN (FORM) --- */
+        .auth-form-area {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            padding: 40px; position: relative;
+        }
+        
+        .back-link { position: absolute; top: 40px; right: 40px; font-weight: 600; color: var(--text-gray); text-decoration: none; display: flex; align-items: center; gap: 8px; transition: var(--transition); }
+        .back-link:hover { color: var(--dark); }
+
+        .form-wrapper { width: 100%; max-width: 400px; }
+        
+        .brand { font-size: 1.5rem; font-weight: 800; color: var(--dark); display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+        .brand i { color: var(--primary); font-size: 1.8rem; }
+
+        .form-header { margin-bottom: 30px; }
+        .form-header h1 { font-size: 1.8rem; font-weight: 800; color: var(--dark); margin-bottom: 8px; }
+        .form-header p { color: var(--text-gray); font-size: 0.95rem; }
+
+        /* Modern Input Styling */
+        .input-group { position: relative; margin-bottom: 20px; }
+        .input-group i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: #94a3b8; transition: var(--transition); font-size: 1.1rem; }
+        .input-group input {
+            width: 100%; padding: 15px 15px 15px 50px; background: var(--bg-input); border: 1px solid var(--border-input);
+            border-radius: 12px; font-size: 0.95rem; color: var(--dark); outline: none; transition: var(--transition);
+        }
+        .input-group input:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(211,84,0,0.1); }
+        .input-group input:focus + i, .input-group:focus-within i { color: var(--primary); }
+
+        .btn-auth {
+            width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: 12px;
+            font-size: 1rem; font-weight: 700; cursor: pointer; transition: var(--transition); box-shadow: 0 4px 12px rgba(211,84,0,0.2); margin-top: 10px;
+        }
+        .btn-auth:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 6px 15px rgba(211,84,0,0.3); }
+
+        .auth-footer { margin-top: 30px; text-align: center; font-size: 0.95rem; color: var(--text-gray); }
+        .auth-footer a { color: var(--primary); font-weight: 700; text-decoration: none; transition: var(--transition); }
+        .auth-footer a:hover { color: var(--primary-hover); text-decoration: underline; }
+
+        /* Error Message Alert */
+        .alert-error {
+            background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 12px 15px;
+            border-radius: 10px; font-size: 0.9rem; font-weight: 500; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
         }
 
-        .btn-login:hover {
-            background-color: #d35400;
+        /* Responsive Mobile */
+        @media (max-width: 900px) {
+            .auth-banner { display: none; } 
+            .auth-form-area { padding: 30px 20px; }
+            .back-link { top: 20px; right: 20px; font-size: 0.9rem; }
         }
-
-        .error-msg {
-            background: #ffebee;
-            color: #c62828;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 13px;
-            margin-bottom: 20px;
-            border: 1px solid #ffcdd2;
-        }
-
-        .links {
-            margin-top: 20px;
-            font-size: 14px;
-        }
-
-        .links a {
-            color: #e67e22;
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .links a:hover { text-decoration: underline; }
-
-        .back-home {
-            display: block;
-            margin-top: 15px;
-            color: #fff; /* Ubah jadi putih agar terlihat di background gelap */
-            font-size: 12px;
-            text-decoration: none;
-            opacity: 0.8;
-        }
-        .back-home:hover { opacity: 1; }
     </style>
 </head>
 <body>
 
-    <div class="login-card">
-        <h2>Selamat Datang</h2>
-        <p>Silakan login untuk mulai bertualang.</p>
-
-        <?php if (!empty($pesan_error)): ?>
-            <div class="error-msg"><?php echo $pesan_error; ?></div>
-        <?php endif; ?>
-
-        <form method="POST" action="login.php">
-            <div class="form-group">
-                <label for="email">Email Address</label>
-                <input type="email" id="email" name="email" placeholder="nama@email.com" required>
+    <div class="auth-layout">
+        <div class="auth-banner">
+            <div class="banner-content">
+                <h2>Penjelajahan Dimulai dari Sini.</h2>
+                <p>Siapkan dirimu untuk menaklukkan puncak-puncak tertinggi Nusantara dengan peralatan outdoor terbaik dan terawat dari kami.</p>
             </div>
-            
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="********" required>
-            </div>
-            
-            <button type="submit" class="btn-login">Masuk Sekarang</button>
-        </form>
-
-        <div class="links">
-            Belum punya akun? <a href="register.php">Daftar di sini</a>
         </div>
-        <a href="index.php" class="back-home">← Kembali ke Beranda</a>
-    </div>
 
-    <div> 
-        
+        <div class="auth-form-area">
+            <a href="index.php" class="back-link"><i class="fas fa-arrow-left"></i> Beranda</a>
+            
+            <div class="form-wrapper">
+                <div class="brand"><i class="fas fa-mountain"></i> Se7en Summits</div>
+                
+                <div class="form-header">
+                    <h1>Selamat Datang Kembali 👋</h1>
+                    <p>Silakan masukkan email dan password untuk melanjutkan.</p>
+                </div>
+
+                <?php if (!empty($pesan_error)): ?>
+                    <div class="alert-error"><i class="fas fa-exclamation-circle"></i> <?php echo $pesan_error; ?></div>
+                <?php endif; ?>
+
+                <form method="POST" action="login.php">
+                    <div class="input-group">
+                        <input type="email" id="email" name="email" placeholder="Alamat Email" required>
+                        <i class="fas fa-envelope"></i>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="password" id="password" name="password" placeholder="Password" required>
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    
+                    <div style="text-align: right; margin-top: -10px; margin-bottom: 20px;">
+                        <a href="#" style="color: var(--primary); font-size: 0.85rem; font-weight: 600; text-decoration: none;">Lupa Password?</a>
+                    </div>
+                    
+                    <button type="submit" class="btn-auth">Masuk ke Akun</button>
+                </form>
+
+                <div class="auth-footer">
+                    Belum memiliki akun? <a href="register.php">Daftar sekarang</a>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>

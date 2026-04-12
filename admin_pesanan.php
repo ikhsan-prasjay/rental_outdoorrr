@@ -3,46 +3,103 @@
 session_start();
 require_once 'koneksi.php';
 
+// --- KODE AUTO-FIX (Hapus setelah dijalankan 1 kali) ---
+$cek_kolom = $koneksi->query("SHOW COLUMNS FROM rentals LIKE 'fine_amount'");
+if ($cek_kolom->num_rows == 0) {
+    $koneksi->query("ALTER TABLE rentals ADD COLUMN fine_amount INT(11) DEFAULT 0");
+    $koneksi->query("ALTER TABLE rentals ADD COLUMN actual_return_date DATETIME NULL");
+    echo "<script>alert('Kolom denda berhasil ditambahkan otomatis ke database!');</script>";
+}
+// --------------------------------------------------------
+
 // 1. CEK KEAMANAN
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header('Location: login.php');
     exit();
 }
 
-// 2. PROSES UPDATE STATUS
+// 2. PROSES UPDATE STATUS & DENDA
 if (isset($_POST['update_status'])) {
     $rental_id = intval($_POST['rental_id']);
     $new_status = $_POST['status'];
     
-    $stmt = $koneksi->prepare("UPDATE rentals SET status = ? WHERE id_rentals = ?");
-    $stmt->bind_param("si", $new_status, $rental_id);
-    
-    if ($stmt->execute()) {
-        $pesan_sukses = "Status pesanan #$rental_id berhasil diperbarui!";
+    // JIKA STATUS DIUBAH MENJADI RETURNED -> HITUNG DENDA
+    if ($new_status === 'returned') {
+        // Ambil end_date dari database
+        $stmt_date = $koneksi->prepare("SELECT end_date FROM rentals WHERE id_rentals = ?");
+        $stmt_date->bind_param("i", $rental_id);
+        $stmt_date->execute();
+        $res_date = $stmt_date->get_result();
+        $row_date = $res_date->fetch_assoc();
+        $end_date_str = $row_date['end_date'];
+        $stmt_date->close();
+
+        // Hitung Keterlambatan
+        $tenggat_waktu = new DateTime($end_date_str);
+        $waktu_aktual = new DateTime(); // Waktu saat ini (sekarang)
+        
+        $total_denda = 0;
+        $hari_telat = 0;
+
+        if ($waktu_aktual > $tenggat_waktu) {
+            $selisih = $tenggat_waktu->diff($waktu_aktual);
+            $hari_telat = $selisih->days;
+            
+            // Pembulatan hari jika ada selisih jam/menit
+            if ($hari_telat == 0 && ($selisih->h > 0 || $selisih->i > 0)) {
+                $hari_telat = 1;
+            } else if ($hari_telat > 0 && ($selisih->h > 0 || $selisih->i > 0)) {
+                $hari_telat++;
+            }
+            
+            // Tarif Denda: Rp 20.000 / Hari
+            $total_denda = $hari_telat * 20000;
+        }
+
+        // Update status, denda, dan tanggal kembali aktual
+        $stmt = $koneksi->prepare("UPDATE rentals SET status = ?, fine_amount = ?, actual_return_date = NOW() WHERE id_rentals = ?");
+        $stmt->bind_param("sii", $new_status, $total_denda, $rental_id);
+        
+        if ($stmt->execute()) {
+            if ($total_denda > 0) {
+                $pesan_sukses = "Pesanan #$rental_id Dikembalikan! Penyewa telat $hari_telat hari. Denda Rp " . number_format($total_denda, 0, ',', '.') . " tercatat otomatis.";
+            } else {
+                $pesan_sukses = "Pesanan #$rental_id Dikembalikan tepat waktu. (Denda: Rp 0).";
+            }
+        } else {
+            $pesan_error = "Gagal memperbarui status.";
+        }
+        $stmt->close();
+        
     } else {
-        $pesan_error = "Gagal memperbarui status.";
+        // UPDATE STATUS BIASA (Bukan returned)
+        $stmt = $koneksi->prepare("UPDATE rentals SET status = ? WHERE id_rentals = ?");
+        $stmt->bind_param("si", $new_status, $rental_id);
+        
+        if ($stmt->execute()) {
+            $pesan_sukses = "Status pesanan #$rental_id berhasil diperbarui menjadi " . strtoupper($new_status) . "!";
+        } else {
+            $pesan_error = "Gagal memperbarui status.";
+        }
+        $stmt->close();
     }
-    $stmt->close();
 }
 
 // 3. PROSES HAPUS TRANSAKSI 
 if (isset($_POST['delete_order'])) {
     $rental_id = intval($_POST['rental_id']);
 
-    // A. Ambil semua item_id yang terkait
     $stmt_get_item = $koneksi->prepare("SELECT item_id FROM rental_items WHERE rental_id = ?");
     $stmt_get_item->bind_param("i", $rental_id);
     $stmt_get_item->execute();
     $res_item = $stmt_get_item->get_result();
 
-    // B. Kembalikan status barang fisik menjadi 'available'
     while ($item = $res_item->fetch_assoc()) {
         $item_id = $item['item_id'];
         $koneksi->query("UPDATE equipment_items SET status = 'available' WHERE id = $item_id");
     }
     $stmt_get_item->close();
 
-    // C. Hapus data transaksi utama
     $stmt_del = $koneksi->prepare("DELETE FROM rentals WHERE id_rentals = ?");
     $stmt_del->bind_param("i", $rental_id);
 
@@ -54,7 +111,7 @@ if (isset($_POST['delete_order'])) {
     $stmt_del->close();
 }
 
-// 4. AMBIL DATA PESANAN
+// 4. AMBIL DATA PESANAN (Tambahkan kolom denda jika dibutuhkan)
 $query = "SELECT rentals.*, users.full_name, users.phone_number, users.email 
           FROM rentals 
           JOIN users ON rentals.user_id = users.id_users 
@@ -287,6 +344,12 @@ $result = $koneksi->query($query);
                                     <div class="date-block">Ambil: <strong><?php echo date('d M Y', strtotime($row['start_date'])); ?></strong></div>
                                     <div class="date-block">Kembali: <strong><?php echo date('d M Y', strtotime($row['end_date'])); ?></strong></div>
                                     <div class="price-tag">Rp <?php echo number_format($row['total_price'], 0, ',', '.'); ?></div>
+                                    
+                                    <?php if (isset($row['fine_amount']) && $row['fine_amount'] > 0): ?>
+                                        <div style="color:#dc2626; font-size:0.8rem; font-weight:bold; margin-top:4px;">
+                                            + Denda: Rp <?php echo number_format($row['fine_amount'], 0, ',', '.'); ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </td>
 
                                 <td>
